@@ -1,7 +1,11 @@
 
 import React from 'react';
-import { PlayerStoryState, GameData, AppState, MailWiseAppData, EmailAccountDef, EmailDef } from '../../types';
-import { ChevronLeftIcon, Bars3Icon, PencilSquareIcon, EnvelopeIcon } from '../icons';
+import { PlayerStoryState, GameData, AppState, MailWiseAppData, EmailAccountDef, EmailDef, FileAttachmentDef, IconProps } from '../../types';
+import { 
+  ChevronLeftIcon, Bars3Icon, PencilSquareIcon, EnvelopeIcon, DocumentTextIcon,
+  PaperclipIcon, CameraIconSolid, ArchiveBoxIcon 
+} from '../icons';
+import { sanitizeHtml } from '../../utils/htmlSanitizer';
 
 interface MailWiseAppProps {
   playerState: PlayerStoryState;
@@ -18,6 +22,19 @@ const MailWiseApp: React.FC<MailWiseAppProps> = ({
 }) => {
   const appState = playerState.smartphoneInstalledApps['mailwise'];
   const appData = appState.appSpecificData as MailWiseAppData;
+
+  const getIconForMimeType = (mimeType?: string): React.FC<IconProps> => {
+    if (mimeType?.startsWith('image/')) {
+      return CameraIconSolid;
+    }
+    if (mimeType === 'application/pdf') {
+      return DocumentTextIcon;
+    }
+    if (['application/zip', 'application/x-zip-compressed', 'application/x-rar-compressed', 'application/vnd.rar', 'application/x-7z-compressed', 'application/x-tar', 'application/gzip'].includes(mimeType || '')) {
+      return ArchiveBoxIcon;
+    }
+    return DocumentTextIcon; // Default
+  };
 
   const updateAppData = (newData: Partial<MailWiseAppData>) => {
     onPlayerStateChange({
@@ -115,7 +132,12 @@ const MailWiseApp: React.FC<MailWiseAppProps> = ({
             className={`w-full p-3 text-left ${email.isRead ? 'bg-transparent hover:bg-white/5' : 'bg-purple-500/10 hover:bg-purple-500/20'}`}>
             <div className="flex justify-between items-baseline">
                 <p className={`font-semibold truncate ${email.isRead ? 'text-gray-200' : 'text-purple-200'}`}>{email.senderName || email.senderAddress}</p>
-                <p className="text-xs text-gray-400 flex-shrink-0 ml-2">{new Date(email.timestamp).toLocaleDateString()}</p>
+                <div className="flex items-center"> {/* Flex container for timestamp and icon */}
+                  {email.attachments && email.attachments.length > 0 && (
+                    <PaperclipIcon className="w-4 h-4 text-gray-400 mr-1" /> // Changed to PaperclipIcon
+                  )}
+                  <p className="text-xs text-gray-400 flex-shrink-0">{new Date(email.timestamp).toLocaleDateString()}</p>
+                </div>
             </div>
             <p className={`truncate ${email.isRead ? 'text-gray-300' : 'text-white font-medium'}`}>{email.subject}</p>
             <p className="text-xs text-gray-400 truncate">{email.body.substring(0,100)}...</p>
@@ -136,16 +158,28 @@ const MailWiseApp: React.FC<MailWiseAppProps> = ({
         <div>
           <p className="text-xs text-gray-400">From: <span className="text-gray-200">{email.senderName || email.senderAddress}</span></p>
           <p className="text-xs text-gray-400">To: <span className="text-gray-200">{email.recipientAddresses.join(', ')}</span></p>
+          {email.ccAddresses && email.ccAddresses.length > 0 && (
+            <p className="text-xs text-gray-400">Cc: <span className="text-gray-200">{email.ccAddresses.join(', ')}</span></p>
+          )}
+          {email.bccAddresses && email.bccAddresses.length > 0 && (
+            <p className="text-xs text-gray-400">Bcc: <span className="text-gray-200">{email.bccAddresses.join(', ')}</span></p>
+          )}
           <p className="text-xs text-gray-400">Date: <span className="text-gray-200">{new Date(email.timestamp).toLocaleString()}</span></p>
         </div>
-        <div className="whitespace-pre-wrap text-sm text-gray-100 bg-white/5 p-3 rounded-md leading-relaxed">{email.body}</div>
+        <div className="text-sm text-gray-100 bg-white/5 p-3 rounded-md leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(email.body) }} />
         {email.attachments && email.attachments.length > 0 && (
             <div>
                 <p className="text-sm font-medium text-gray-300">Attachments:</p>
                 <ul className="list-disc list-inside pl-2 text-xs">
-                    {email.attachments.map(att => (
-                        <li key={att.filename} className="text-purple-300 hover:underline cursor-pointer">{att.filename} ({Math.round(att.sizeBytes/1024)}KB)</li>
-                    ))}
+                    {email.attachments.map(att => {
+                        const Icon = getIconForMimeType(att.mimeType);
+                        return (
+                            <li key={att.filename} className="text-purple-300 hover:underline cursor-pointer flex items-center">
+                              <Icon className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
+                              {att.filename} ({Math.round(att.sizeBytes/1024)}KB)
+                            </li>
+                        );
+                    })}
                 </ul>
             </div>
         )}
