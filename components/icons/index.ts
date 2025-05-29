@@ -39,4 +39,3 @@ export { default as CameraIconLockScreen } from './CameraIconLockScreen';
 export { default as PhoneIconLockScreen } from './PhoneIconLockScreen';
 export { default as PaperclipIcon } from './PaperclipIcon';
 export { default as ArchiveBoxIcon } from './ArchiveBoxIcon';
-    

@@ -65,37 +65,40 @@ function processNode(node: Node): Node | null {
 }
 
 export function sanitizeHtml(htmlString: string): string {
+  const convertToPlainText = (str: string): string => {
+    return str.replace(/<[^>]+>/g, '');
+  };
+
   if (typeof DOMParser === 'undefined') {
-    // DOMParser is not available in this environment (e.g., Node.js without jsdom)
-    // Fallback: return the original string, or a very basic plain text version.
-    // For security, it's better to return an empty string or escape HTML entities.
-    console.warn('DOMParser not available. HTML sanitization skipped. Returning plain text.');
-    const SCRIPT_REGEX = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi;
-    while (SCRIPT_REGEX.test(htmlString)) {
-        htmlString = htmlString.replace(SCRIPT_REGEX, "");
-    }
-    // Basic escape
-    return htmlString
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+    console.warn('DOMParser not available. Falling back to plain text conversion.');
+    return convertToPlainText(htmlString);
   }
 
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(htmlString, 'text/html');
-  
-  // Create a new div to hold the sanitized content
-  const sanitizedContainer = document.createElement('div');
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlString, 'text/html');
 
-  // Process each child node of the parsed body
-  for (let i = 0; i < doc.body.childNodes.length; i++) {
-    const node = doc.body.childNodes[i];
-    const processed = processNode(node);
-    if (processed) {
-      sanitizedContainer.appendChild(processed);
+    // Check for parsing errors explicitly, as DOMParser might return an error document
+    // instead of throwing an exception for some types of malformed HTML.
+    if (doc.getElementsByTagName('parsererror').length > 0) {
+        console.warn('DOMParser encountered a parsing error. Falling back to plain text conversion.');
+        return convertToPlainText(htmlString);
     }
-  }
+    
+    // Create a new div to hold the sanitized content
+    const sanitizedContainer = document.createElement('div');
 
-  return sanitizedContainer.innerHTML;
+    // Process each child node of the parsed body
+    for (let i = 0; i < doc.body.childNodes.length; i++) {
+      const node = doc.body.childNodes[i];
+      const processed = processNode(node);
+      if (processed) {
+        sanitizedContainer.appendChild(processed);
+      }
+    }
+    return sanitizedContainer.innerHTML;
+  } catch (error) {
+    console.warn('Error during DOMParser operations or sanitization. Falling back to plain text conversion.', error);
+    return convertToPlainText(htmlString);
+  }
 }

@@ -1,15 +1,11 @@
 
 import React from 'react';
-import { PlayerStoryState, GameData, AppState, MailWiseAppData, EmailAccountDef, EmailDef, FileAttachmentDef } from '../../types';
+import { PlayerStoryState, GameData, AppState, MailWiseAppData, EmailAccountDef, EmailDef, FileAttachmentDef, IconProps } from '../../types';
 import { 
   ChevronLeftIcon, Bars3Icon, PencilSquareIcon, EnvelopeIcon, DocumentTextIcon,
   PaperclipIcon, CameraIconSolid, ArchiveBoxIcon 
 } from '../icons';
 import { sanitizeHtml } from '../../utils/htmlSanitizer';
-
-interface IconProps { // Defined as per example for the helper function
-  className?: string;
-}
 
 interface MailWiseAppProps {
   playerState: PlayerStoryState;
