@@ -34,6 +34,12 @@ jobs:
       - name: Copy CNAME to dist
         run: cp CNAME dist/
 
+      - name: Archive build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vite-build-dist
+          path: dist/
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
