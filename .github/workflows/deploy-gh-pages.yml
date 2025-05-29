@@ -3,7 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - feat/setup-github-pages # Or your default branch
+      - main # Or your default branch
   workflow_dispatch: # Allows manual triggering
 
 permissions:
@@ -27,7 +27,7 @@ jobs:
         run: npm install # Assuming npm, change to yarn install if you use Yarn
 
       - name: Build project
-        run: npm run build -- --debug # Uses the build script from package.json
+        run: npm run build -- --debug # Added --debug flag
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # Pass API key as secret
 

@@ -9,7 +9,7 @@ import {
   SearchIcon, BrightnessIcon, CameraIconLockScreen, PhoneIconLockScreen
 } from './icons'; 
 import { CSSTransition, SwitchTransition } from 'react-transition-group';
-import { defaultPalette } from '../../src/utils/themeUtils';
+import { defaultPalette } from '@/src/utils/themeUtils';
 
 
 // Import App Components
