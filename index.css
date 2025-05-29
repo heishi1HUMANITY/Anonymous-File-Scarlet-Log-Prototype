@@ -1,0 +1,6 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Any pre-existing content in index.css should be preserved below these lines */
+/* For now, assume it's a new file or overwrite if it only had CDN-related placeholders */

@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Anonymous Cell - 偽りの接続</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- <script src="https://cdn.tailwindcss.com"></script>  THIS LINE MUST BE REMOVED -->
+  <link rel="stylesheet" href="/index.css"> <!-- Ensure this path is root-relative -->
   <style>
     body {
       font-family: 'Menlo', 'Monaco', 'Consolas', "Liberation Mono", "Courier New", monospace;
@@ -93,5 +94,4 @@
   <!-- Removed <div id="ui-mode-switcher-container"></div> -->
   <script type="module" src="/index.tsx"></script>
 </body>
-</html><link rel="stylesheet" href="index.css">
-<script src="index.tsx" type="module"></script>
+</html>
