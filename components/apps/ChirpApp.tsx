@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { PlayerStoryState, GameData, AppState, ChirpAppData, ChirpPostDef } from '../../types';
-import { ChevronLeftIcon, HomeIcon, SearchIcon, NotificationsBellIcon, EnvelopeIcon, PencilSquareIcon, UserCircleIcon } from '../icons';
+import { ChevronLeftIcon, HomeIcon, SearchIcon, NotificationsBellIcon, EnvelopeIcon, PencilSquareIcon, UserCircleIcon, ArrowPathIcon, BookmarkIcon, PaperAirplaneIcon } from '../icons';
 
 interface ChirpAppProps {
   playerState: PlayerStoryState;
@@ -70,6 +70,28 @@ const ChirpApp: React.FC<ChirpAppProps> = ({
                     <span>👁️ {chirp.repostCount || 0}</span> {/* Assuming repostCount is view count for simplicity */}
                 </div>
             )}
+            {!isDetailView && (
+              <div className="flex justify-around items-center text-xs text-gray-400 mt-3 pt-2 border-t border-white/10">
+                <button className="flex items-center space-x-1 hover:text-blue-400">
+                  <span>Reply</span>
+                </button>
+                <button className="flex items-center space-x-1 hover:text-green-400">
+                  <ArrowPathIcon className="w-4 h-4" />
+                  <span>ReChirp</span>
+                </button>
+                <button className="flex items-center space-x-1 hover:text-red-400">
+                  <span>Like</span>
+                </button>
+                <button className="flex items-center space-x-1 hover:text-yellow-400">
+                  <BookmarkIcon className="w-4 h-4" />
+                  <span>Bookmark</span>
+                </button>
+                <button className="flex items-center space-x-1 hover:text-purple-400">
+                  <PaperAirplaneIcon className="w-4 h-4" />
+                  <span>Share</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -86,7 +108,51 @@ const ChirpApp: React.FC<ChirpAppProps> = ({
     if (!appData.selectedChirpId) return null;
     const chirp = appData.timelineChirps.find(c => c.chirpId === appData.selectedChirpId);
     if (!chirp) return <p className="p-4 text-center text-gray-400">Chirp not found.</p>;
-    return renderChirp(chirp, true);
+
+    const authorProfile = gameData.socialMediaProfiles?.chirp?.find(p => p.characterId === chirp.authorCharacterId);
+    const fullPost = authorProfile?.posts?.find(p => p.postId === chirp.chirpId);
+    const replies = fullPost?.comments || [];
+
+    return (
+      <div className="overflow-y-auto scrollbar-hide"> {/* Ensure detail view content itself can scroll if very long */}
+        {renderChirp(chirp, true)} {/* Renders the main chirp */}
+        
+        {/* Replies Section */}
+        <div className="mt-4 p-3">
+          <h3 className="text-lg font-semibold text-purple-200 border-b border-white/10 pb-2 mb-2">Replies</h3>
+          {replies.length > 0 ? (
+            <div className="space-y-3">
+              {replies.map(reply => {
+                const replierProfile = gameData.socialMediaProfiles?.chirp?.find(p => p.userId === reply.authorUserId);
+                const replierName = replierProfile?.username || reply.authorUserId;
+                const replierAvatar = replierProfile?.profilePictureUrl;
+                
+                return (
+                  <div key={reply.commentId} className="p-2 border border-white/10 rounded-md bg-black/20">
+                    <div className="flex items-start">
+                      {replierAvatar ? (
+                        <img src={replierAvatar} alt={replierName} className="w-8 h-8 rounded-full mr-2 flex-shrink-0" />
+                      ) : (
+                        <UserCircleIcon className="w-8 h-8 rounded-full mr-2 text-gray-400 flex-shrink-0" />
+                      )}
+                      <div className="flex-grow">
+                        <div className="flex items-baseline space-x-1">
+                          <p className="font-semibold text-sm text-purple-100">{replierName}</p>
+                          <p className="text-xs text-gray-500">· {new Date(reply.timestamp).toLocaleDateString()}</p>
+                        </div>
+                        <p className="text-sm text-gray-200 mt-0.5 whitespace-pre-wrap">{reply.text}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 italic">No replies yet.</p>
+          )}
+        </div>
+      </div>
+    );
   }
 
   const renderContent = () => {
