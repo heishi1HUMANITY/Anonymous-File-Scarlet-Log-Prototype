@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { PlayerStoryState, GameData, ConversationThread, InboxMessage, AppState, WhisperTalkAppData } from '../../types';
 import { ChevronLeftIcon, PaperAirplaneIcon, CameraIconSolid, MicrophoneIcon, UserCircleIcon } from '../icons';
 
@@ -22,10 +22,16 @@ const WhisperTalkApp: React.FC<WhisperTalkAppProps> = ({
 }) => {
   const appState = playerState.smartphoneInstalledApps['whispertalk'];
   const appData = appState.appSpecificData as WhisperTalkAppData;
+  const [currentMessage, setCurrentMessage] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const threads = Object.values(playerState.inboxThreads).sort((a, b) => 
     new Date(b.lastMessageTimestamp).getTime() - new Date(a.lastMessageTimestamp).getTime()
   );
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const setCurrentView = (view: 'chat_list' | 'chat_screen', threadId?: string) => {
     const newAppData: WhisperTalkAppData = { currentView: view, selectedThreadId: threadId };
@@ -45,6 +51,78 @@ const WhisperTalkApp: React.FC<WhisperTalkAppProps> = ({
   };
   
   const selectedThread = appData.selectedThreadId ? playerState.inboxThreads[appData.selectedThreadId] : null;
+
+  useEffect(() => {
+    if (appData.currentView === 'chat_screen' && selectedThread) {
+      scrollToBottom();
+    }
+  }, [selectedThread?.messages, appData.currentView, selectedThread]);
+
+  const handleSendMessage = () => {
+    if (!selectedThread || !appData.selectedThreadId || !currentMessage.trim()) return;
+
+    const threadId = appData.selectedThreadId;
+    const playerMessage: InboxMessage = {
+      id: Date.now().toString(),
+      threadId,
+      timestamp: new Date().toISOString(),
+      senderId: 'player',
+      recipientId: selectedThread.participants.find(pId => pId !== 'player') || '', // Ensure there's a recipient
+      body: currentMessage.trim(),
+      type: 'sent',
+      isRead: true,
+    };
+
+    const updatedPlayerState = {
+      ...playerState,
+      inboxThreads: {
+        ...playerState.inboxThreads,
+        [threadId]: {
+          ...selectedThread,
+          messages: [...selectedThread.messages, playerMessage],
+          lastMessageTimestamp: playerMessage.timestamp,
+          hasUnread: false, // Player sending a message implies they've read the thread
+        },
+      },
+    };
+    onPlayerStateChange(updatedPlayerState);
+    setCurrentMessage('');
+
+    // Simulate NPC response
+    setTimeout(() => {
+      // Ensure thread is still selected and exists
+      const currentThread = updatedPlayerState.inboxThreads[threadId];
+      if (!currentThread || appData.selectedThreadId !== threadId) return;
+
+      const npcId = currentThread.participants.find(pId => pId !== 'player');
+      if (!npcId) return; // Should not happen in 1-on-1 chat
+
+      const npcMessage: InboxMessage = {
+        id: (Date.now() + 1).toString(), // Ensure unique ID
+        threadId,
+        timestamp: new Date().toISOString(),
+        senderId: npcId,
+        recipientId: 'player',
+        body: "Thanks for your message! I'll get back to you soon.", // Dummy response
+        type: 'received',
+        isRead: appData.currentView === 'chat_screen' && appData.selectedThreadId === threadId ? true : false, // Read if user is viewing the chat
+      };
+      
+      const finalPlayerState = {
+        ...updatedPlayerState,
+        inboxThreads: {
+          ...updatedPlayerState.inboxThreads,
+          [threadId]: {
+            ...currentThread,
+            messages: [...currentThread.messages, npcMessage],
+            lastMessageTimestamp: npcMessage.timestamp,
+            hasUnread: !(appData.currentView === 'chat_screen' && appData.selectedThreadId === threadId),
+          },
+        },
+      };
+      onPlayerStateChange(finalPlayerState);
+    }, 1500);
+  };
 
   const getContactDisplay = (thread: ConversationThread) => {
     if (thread.groupName) return { name: thread.groupName, avatar: null }; // Group avatar placeholder
@@ -88,15 +166,35 @@ const WhisperTalkApp: React.FC<WhisperTalkAppProps> = ({
               </div>
             </div>
           ))}
+          <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area - Placeholder */}
+        {/* Input Area */}
         <div className="p-3 border-t border-white/10 bg-black/50 backdrop-blur-md">
           <div className="flex items-center bg-gray-700 rounded-full p-1">
-            <input type="text" placeholder="Type a message..." className="flex-grow bg-transparent px-3 py-2 text-sm focus:outline-none placeholder-gray-400" disabled />
-            <button className="p-2 text-gray-400 hover:text-purple-400" aria-label="Attach file"><CameraIconSolid className="w-5 h-5" /></button>
-            <button className="p-2 text-gray-400 hover:text-purple-400" aria-label="Record voice message"><MicrophoneIcon className="w-5 h-5" /></button>
-            <button className="p-2 text-purple-500 hover:text-purple-400" aria-label="Send message"><PaperAirplaneIcon className="w-5 h-5" /></button>
+            <input
+              type="text"
+              placeholder="Type a message..."
+              className="flex-grow bg-transparent px-3 py-2 text-sm focus:outline-none placeholder-gray-400 text-white"
+              value={currentMessage}
+              onChange={(e) => setCurrentMessage(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+            />
+            <button className="p-2 text-gray-400 hover:text-purple-400" aria-label="Attach file" disabled><CameraIconSolid className="w-5 h-5" /></button>
+            <button className="p-2 text-gray-400 hover:text-purple-400" aria-label="Record voice message" disabled><MicrophoneIcon className="w-5 h-5" /></button>
+            <button 
+              className="p-2 text-purple-500 hover:text-purple-400 disabled:text-gray-500" 
+              aria-label="Send message"
+              onClick={handleSendMessage}
+              disabled={!currentMessage.trim()}
+            >
+              <PaperAirplaneIcon className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </div>
