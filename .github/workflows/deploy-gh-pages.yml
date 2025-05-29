@@ -31,6 +31,9 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # Pass API key as secret
 
+      - name: Copy CNAME to dist
+        run: cp CNAME dist/
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
