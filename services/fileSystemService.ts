@@ -1,4 +1,5 @@
 
+
 // Fix: Import PlayerStoryState instead of PlayerState, and necessary Initial* types
 import { FileSystemStructure, FileSystemItem, FileSystemNodeType, FileNode, DirectoryNode, PlayerStoryState, InitialFileSystemStructure, InitialFileSystemItem, InitialDirectoryNode, InitialFileNode } from '../types';
 
@@ -27,7 +28,8 @@ export function getInitialNodeFromPath(path: string, initialFs: InitialFileSyste
   const parts = path.split('/').filter(p => p);
   
   if (path === '/') {
-    return initialFs['/'] || null;
+    // Ensure the root entry itself is returned, not its children property or undefined
+    return initialFs['/'] || null; 
   }
 
   let currentNodeFromInitial: InitialFileSystemItem | undefined = initialFs['/'];
@@ -109,16 +111,21 @@ export function readFileContents(filePath: string, fsState: FileSystemStructure)
   return fileNode.content;
 }
 
-// Fix: Change PlayerState to PlayerStoryState
-export function changeDirectory(targetPath: string, playerState: PlayerStoryState): { newPath: string; error?: string } {
-  const resolvedTargetPath = resolvePath(playerState.currentPath, targetPath);
-  const node = getNodeFromPath(resolvedTargetPath, playerState.fileSystemState);
+// Updated changeDirectory: takes currentPath and fsStateForValidation
+// Returns newPath or an error, but doesn't modify playerState directly.
+export function changeDirectory(
+  targetPath: string, 
+  currentPath: string, 
+  fsStateForValidation: FileSystemStructure
+): { newPath: string; error?: string } {
+  const resolvedTargetPath = resolvePath(currentPath, targetPath);
+  const node = getNodeFromPath(resolvedTargetPath, fsStateForValidation);
 
   if (!node) {
-    return { newPath: playerState.currentPath, error: `cd: no such file or directory: ${targetPath}` };
+    return { newPath: currentPath, error: `cd: no such file or directory: ${targetPath}` };
   }
   if (node.type !== FileSystemNodeType.DIRECTORY) {
-    return { newPath: playerState.currentPath, error: `cd: not a directory: ${targetPath}` };
+    return { newPath: currentPath, error: `cd: not a directory: ${targetPath}` };
   }
-  return { newPath: resolvedTargetPath };
+  return { newPath: resolvedTargetPath }; // Return the resolved path on success
 }

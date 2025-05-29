@@ -1,6 +1,6 @@
 {
-  "name": "Anonymous File: Scarlet Log Prototype",
-  "description": "A prototype for an interactive cyber mystery game, 'Anonymous File - Scarlet Log' episode. Players interact via a simulated shell interface to uncover digital evidence, solve puzzles, and experience a branching narrative.",
+  "name": "Anonymous Cell - 偽りの接続",
+  "description": "An interactive cyber mystery game featuring dual UIs: a smartphone (CellOS) and a terminal. Uncover truths by navigating both digital worlds.",
   "requestFramePermissions": [],
   "prompt": ""
 }

@@ -1,18 +1,20 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ShellMessage, PlayerStoryState, GameData, ParsedCommand, FileSystemNodeType } from '../types'; // PlayerState -> PlayerStoryState
+import { ShellMessage, PlayerStoryState, GameData, ParsedCommand, FileSystemNodeType, DeviceConfig, StoryContentData } from '../types';
 import { parseCommand } from '../services/commandParser';
 import { processCommand } from '../services/gameLogicService';
 import ShellOutputLine from './ShellOutputLine';
 import { getNodeFromPath, resolvePath } from '../services/fileSystemService';
+import { PLAYER_MAIN_NODE_ID } from '../src/constants';
 
 interface ShellInterfaceProps {
-  playerState: PlayerStoryState; // Changed from PlayerState
+  playerState: PlayerStoryState;
   gameData: GameData;
-  onPlayerStateChange: (newState: PlayerStoryState) => void; // Changed from PlayerState
+  onPlayerStateChange: (newState: PlayerStoryState) => void;
   initialMessages?: ShellMessage[];
-  onRequestExit: () => void;
-  debugModeSpeed?: boolean;
+  onRequestExitApplication: () => void; 
+  currentDevicePromptConfig?: DeviceConfig | StoryContentData['storyInfo']['playerDefaultDeviceConfig'];
+  debugModeSpeed?: boolean; 
 }
 
 const ShellInterface: React.FC<ShellInterfaceProps> = ({ 
@@ -20,7 +22,8 @@ const ShellInterface: React.FC<ShellInterfaceProps> = ({
   gameData, 
   onPlayerStateChange, 
   initialMessages = [], 
-  onRequestExit,
+  onRequestExitApplication,
+  currentDevicePromptConfig,
   debugModeSpeed = false 
 }) => {
   const [input, setInput] = useState('');
@@ -29,13 +32,12 @@ const ShellInterface: React.FC<ShellInterfaceProps> = ({
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   
-  const processedInitialMessagesRef = useRef<ShellMessage[] | null>(null);
-
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const initialMessagesProcessedRef = useRef(false); 
 
   const scrollToBottom = useCallback(() => {
-    endOfMessagesRef.current?.scrollIntoView({ behavior: 'smooth' });
+    endOfMessagesRef.current?.scrollIntoView({ behavior: 'auto' }); // Changed to auto for faster scroll with lots of output
   }, []);
 
   const processAndDisplayMessages = useCallback(async (messagesToProcess: ShellMessage[], baseDelayDefault: number = 50, perCharDelayDefault: number = 10, forInitialSetup: boolean = false) => {
@@ -44,7 +46,9 @@ const ShellInterface: React.FC<ShellInterfaceProps> = ({
     const baseDelay = debugModeSpeed ? 1 : baseDelayDefault;
     const perCharDelay = debugModeSpeed ? 0 : perCharDelayDefault;
 
-    let currentHistorySnapshotForInitialSetup = forInitialSetup ? [] : null;
+    if (forInitialSetup && history.length === 0) { // Only clear history if it's actually empty for initial setup
+        setHistory([]); 
+    }
 
     for (let msgIdx = 0; msgIdx < messagesToProcess.length; msgIdx++) {
       const originalMessage = messagesToProcess[msgIdx];
@@ -52,30 +56,17 @@ const ShellInterface: React.FC<ShellInterfaceProps> = ({
       const messageShell: ShellMessage = { 
         ...originalMessage, 
         id: typedMessageInstanceId,
-        text: '' 
+        text: originalMessage.type === 'progress' || originalMessage.isRawHTML ? originalMessage.text : '' // For progress/HTML, show full text immediately
       };
       
-      if (forInitialSetup && currentHistorySnapshotForInitialSetup) {
-        currentHistorySnapshotForInitialSetup.push(messageShell);
-        setHistory([...currentHistorySnapshotForInitialSetup]);
-      } else {
-        setHistory(prev => [...prev, messageShell]);
-        await new Promise(r => setTimeout(r, 0)); 
-      }
+      setHistory(prev => [...prev, messageShell]);
       
-      for (let i = 0; i < originalMessage.text.length; i++) {
-        if (perCharDelay > 0) await new Promise(r => setTimeout(r, perCharDelay));
-        
-        if (forInitialSetup && currentHistorySnapshotForInitialSetup) {
-            const targetMsgInSnapshot = currentHistorySnapshotForInitialSetup[currentHistorySnapshotForInitialSetup.length - 1];
-            if (targetMsgInSnapshot.id === typedMessageInstanceId) {
-                 targetMsgInSnapshot.text = originalMessage.text.substring(0, i + 1);
-            }
-            setHistory([...currentHistorySnapshotForInitialSetup]);
-        } else {
-            setHistory(prev => prev.map(h => 
-                (h.id === typedMessageInstanceId) ? { ...h, text: originalMessage.text.substring(0, i + 1) } : h
-            ));
+      if (originalMessage.type !== 'progress' && !originalMessage.isRawHTML && originalMessage.text.length > 0) {
+        for (let i = 0; i < originalMessage.text.length; i++) {
+          if (perCharDelay > 0) await new Promise(r => setTimeout(r, perCharDelay));
+          setHistory(prev => prev.map(h => 
+              (h.id === typedMessageInstanceId) ? { ...h, text: originalMessage.text.substring(0, i + 1) } : h
+          ));
         }
       }
       if (msgIdx < messagesToProcess.length - 1 && baseDelay > 0) {
@@ -83,37 +74,42 @@ const ShellInterface: React.FC<ShellInterfaceProps> = ({
       }
     }
     
-    if (forInitialSetup) {
-        setIsProcessing(false); 
-    }
-  }, [debugModeSpeed]); 
+    // setIsProcessing(false) will be handled by handleSubmit or the initial effect
+  }, [debugModeSpeed, history.length]); // Add history.length to dependencies for forInitialSetup check
 
 
   useEffect(() => {
-     if (initialMessages && initialMessages.length > 0 && initialMessages !== processedInitialMessagesRef.current && !isProcessing) {
-        setHistory([]); 
-        processedInitialMessagesRef.current = initialMessages; 
-
-        const initialBaseDelay = debugModeSpeed ? 1 : 150;
-        const initialPerCharDelay = debugModeSpeed ? 0 : 30;
+     if (initialMessages && initialMessages.length > 0 && !isProcessing && !initialMessagesProcessedRef.current ) {
+        const initialBaseDelay = debugModeSpeed ? 1 : 30; 
+        const initialPerCharDelay = debugModeSpeed ? 0 : 5; 
         
-        processAndDisplayMessages(initialMessages, initialBaseDelay, initialPerCharDelay, true);
+        // Set the ref immediately to prevent re-entry
+        initialMessagesProcessedRef.current = true; 
+        
+        processAndDisplayMessages(initialMessages, initialBaseDelay, initialPerCharDelay, true)
+            .finally(() => {
+                setIsProcessing(false); // Ensure processing is false after initial messages
+                // Do NOT reset initialMessagesProcessedRef.current here
+            });
+     } else if (initialMessagesProcessedRef.current && isProcessing && initialMessages.length > 0) {
+        // If initial messages were processed but we are still processing (e.g. from debug sequence)
+        // don't set isProcessing to false yet.
      }
-  }, [initialMessages, debugModeSpeed, isProcessing, processAndDisplayMessages]);
+  }, [initialMessages, debugModeSpeed, isProcessing, processAndDisplayMessages]); 
 
 
   useEffect(scrollToBottom, [history, scrollToBottom]);
   
   useEffect(() => {
-    if (!isProcessing && playerState) { // Check playerState exists
+    if (!isProcessing && playerState) { 
         inputRef.current?.focus();
     }
-  }, [isProcessing, playerState?.currentPath, playerState?.username]); // Use optional chaining
+  }, [isProcessing, playerState?.currentPath, playerState?.username, playerState?.currentConnectedDeviceId]); 
 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isProcessing || !playerState) return; // Ensure playerState exists
+    if (!input.trim() || isProcessing || !playerState) return; 
 
     setIsProcessing(true);
     const currentInput = input.trim();
@@ -124,7 +120,7 @@ const ShellInterface: React.FC<ShellInterfaceProps> = ({
         type: 'prompt', 
         text: '', 
         pathAtCommandTime: playerState.currentPath,
-        usernameAtCommandTime: playerState.username 
+        deviceIdAtCommandTime: playerState.currentConnectedDeviceId 
     };
     const historicalInputMessage: ShellMessage = {
         id: `input_${Date.now()}_${Math.random().toString(16).slice(2)}`, 
@@ -139,38 +135,36 @@ const ShellInterface: React.FC<ShellInterfaceProps> = ({
     }
     setHistoryIndex(-1); 
 
-
     const parsedCmd = parseCommand(currentInput); 
-    const { outputMessages, newPlayerStoryState, anOutputDelay } = await processCommand(parsedCmd, playerState, gameData); // gameData passed directly
+    const { outputMessages, newPlayerStoryState, anOutputDelay } = await processCommand(parsedCmd, playerState, gameData); 
     
+    onPlayerStateChange(newPlayerStoryState);
+
     const clearSignalPresent = outputMessages.some(msg => msg.type === 'clear_signal');
     const exitSignalPresent = outputMessages.some(msg => msg.type === 'exit_signal');
 
     if (clearSignalPresent) {
       setHistory([]); 
+      // DO NOT reset initialMessagesProcessedRef.current here. `clear` should only clear history.
+    }
+    
+    const messagesToActuallyDisplay = outputMessages.filter(msg => msg.type !== 'clear_signal' && msg.type !== 'exit_signal');
+    
+    if (messagesToActuallyDisplay.length > 0) {
+      const cmdBaseDelay = debugModeSpeed ? 1 : (anOutputDelay || 10); 
+      const cmdPerCharDelay = debugModeSpeed ? 0 : 2; 
+      await processAndDisplayMessages(messagesToActuallyDisplay, cmdBaseDelay, cmdPerCharDelay, false);
     }
 
     if (exitSignalPresent) {
-      onRequestExit(); 
-      setIsProcessing(false); 
-      onPlayerStateChange(newPlayerStoryState); 
-      return;
+      onRequestExitApplication(); 
     }
-
-    const displayableMessages = outputMessages.filter(msg => msg.type !== 'clear_signal' && msg.type !== 'exit_signal');
-
-    if (displayableMessages.length > 0) {
-        const cmdBaseDelay = debugModeSpeed ? 1 : (anOutputDelay || 30);
-        const cmdPerCharDelay = debugModeSpeed ? 0 : 5;
-        await processAndDisplayMessages(displayableMessages, cmdBaseDelay, cmdPerCharDelay, false);
-    }
-
-    onPlayerStateChange(newPlayerStoryState);
+    
     setIsProcessing(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!playerState) return; // Ensure playerState exists
+    if (!playerState || !gameData) return; 
 
     if (e.key === 'Tab') {
         e.preventDefault();
@@ -179,10 +173,20 @@ const ShellInterface: React.FC<ShellInterfaceProps> = ({
         const currentInputValue = input;
         const words = currentInputValue.trimStart().split(' ');
         const isTypingCommand = words.length <= 1 && !currentInputValue.endsWith(' ');
+        const currentFs = playerState.deviceFileSystems[playerState.currentConnectedDeviceId];
 
         if (isTypingCommand) {
             const partialCommand = currentInputValue.trimStart().toLowerCase();
-            const potentialCommands = Object.keys(gameData.commandDefinitions).filter(cmd => cmd.startsWith(partialCommand));
+            const potentialCommands = Object.keys(gameData.commandDefinitions).filter(cmd => {
+                const cmdDef = gameData.commandDefinitions[cmd];
+                let isAllowedOnCurrentDevice = false;
+                if (cmdDef.allowedDeviceContexts && cmdDef.allowedDeviceContexts.length > 0) {
+                    isAllowedOnCurrentDevice = cmdDef.allowedDeviceContexts.includes(playerState.currentConnectedDeviceId);
+                } else { 
+                    isAllowedOnCurrentDevice = playerState.currentConnectedDeviceId === PLAYER_MAIN_NODE_ID;
+                }
+                return isAllowedOnCurrentDevice && cmd.startsWith(partialCommand);
+            });
 
             if (potentialCommands.length === 1) {
                 setInput(potentialCommands[0] + ' ');
@@ -205,11 +209,11 @@ const ShellInterface: React.FC<ShellInterfaceProps> = ({
                     setHistory(prev => [...prev, suggestionsMessage]);
                 }
             }
-        } else { // Path completion
+        } else { 
             const commandName = words[0].toLowerCase();
-            const pathCommands = ['ls', 'dir', 'cd', 'cat', 'type', 'analyze', 'decrypt'];
+            const pathCommands = ['ls', 'dir', 'cd', 'cat', 'type', 'analyze', 'decrypt', 'grep']; 
 
-            if (pathCommands.includes(commandName) && words.length > 0) {
+            if (pathCommands.includes(commandName) && words.length > 0 && currentFs) {
                 let argInProgress: string;
                 let inputPrefixUpToArg: string; 
 
@@ -235,7 +239,7 @@ const ShellInterface: React.FC<ShellInterfaceProps> = ({
                 }
                 
                 const resolvedBaseDirForSearch = resolvePath(playerState.currentPath, dirPortionOfArg);
-                const baseDirNode = getNodeFromPath(resolvedBaseDirForSearch, playerState.fileSystemState);
+                const baseDirNode = getNodeFromPath(resolvedBaseDirForSearch, currentFs);
 
                 if (baseDirNode && baseDirNode.type === FileSystemNodeType.DIRECTORY) {
                     const itemsInDir = Object.values(baseDirNode.children);
@@ -298,18 +302,7 @@ const ShellInterface: React.FC<ShellInterfaceProps> = ({
     } 
   };
 
-  // Determine if input should be disabled
-  const isInputDisabled = isProcessing || 
-                        !playerState || // No player state yet
-                        (playerState.narrativeFlags.story_completed_successfully && // Story completed
-                            parseCommand(input).command !== 'clear' && 
-                            parseCommand(input).command !== 'help' && 
-                            parseCommand(input).command !== 'exit') ||
-                        (playerState.gameStage === 'ending' && // Generic ending stage
-                            !playerState.narrativeFlags.story_completed_successfully && // But not if it was just completed
-                            parseCommand(input).command !== 'clear' && 
-                            parseCommand(input).command !== 'help' && 
-                            parseCommand(input).command !== 'exit');
+  const isInputDisabled = isProcessing || !playerState;
 
 
   return (
@@ -321,14 +314,23 @@ const ShellInterface: React.FC<ShellInterfaceProps> = ({
         aria-live="polite"
       >
         {history.map((msg) => (
-            <ShellOutputLine key={msg.id} message={msg}/>
+            <ShellOutputLine 
+                key={msg.id} 
+                message={msg}
+                playerUsername={playerState.username} 
+                gameData={gameData} 
+                currentPath={playerState.currentPath} 
+                currentDevicePromptConfig={currentDevicePromptConfig} 
+            />
         ))}
         <form onSubmit={handleSubmit} className="flex items-center mt-1">
-          {!isProcessing && playerState && ( // Check playerState before rendering prompt
+          {!isProcessing && playerState && ( 
             <ShellOutputLine 
               message={{ id: 'prompt-current', type: 'prompt', text: '' }} 
+              playerUsername={playerState.username}
+              gameData={gameData}
               currentPath={playerState.currentPath} 
-              currentUsername={playerState.username} 
+              currentDevicePromptConfig={currentDevicePromptConfig}
             />
           )}
           <input

@@ -13,19 +13,19 @@ const CharacterProfile: React.FC<CharacterProfileProps> = ({ playerState, gameDa
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   const [currentNote, setCurrentNote] = useState<string>('');
 
-  const knownCharactersToDisplay = Object.keys(playerState.characterDynamicData).map(charId => {
-    const charTemplate = gameData.characters[charId];
-    return {
-        id: charId,
-        name: charTemplate?.name || charId,
-        // trustLevel: playerState.characterDynamicData[charId].trustLevel // Trust level removed from display object
-    };
-  });
+  const knownCharactersToDisplay = Object.keys(playerState.characterDynamicData)
+    .filter(charId => playerState.characterDynamicData[charId]?.canBeContacted === true) // Filter by canBeContacted
+    .map(charId => {
+      const charTemplate = gameData.characters[charId];
+      return {
+          id: charId,
+          name: charTemplate?.name || charId,
+      };
+    });
   
   const selectedCharacterDetails = selectedCharacterId ? {
       id: selectedCharacterId,
       name: gameData.characters[selectedCharacterId]?.name || selectedCharacterId,
-      // trustLevel: playerState.characterDynamicData[selectedCharacterId]?.trustLevel // Trust level removed
   } : null;
 
   useEffect(() => {
